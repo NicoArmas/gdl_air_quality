@@ -1,4 +1,5 @@
 #Ignore Folders
 
 data/
+data_backup/
 .idea/
