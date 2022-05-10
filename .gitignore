@@ -1,6 +1,10 @@
-#Ignore Folders
+# Ignore Folders
 
 data/
 data_backup/
 .idea/
 **/__pycache__
+
+# Ignore Files
+
+code/experiments.ipynb

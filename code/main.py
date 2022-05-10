@@ -1,11 +1,12 @@
 from tracemalloc import start
-from airquality import AirQuality, AirQualityGraph
+from airquality import AirQuality
 
 
 def main():
     aq = AirQuality()
-    graph = aq.create_subgraph(start_node = 75, size = 10)
-    graph.print_info()
+    print(aq.lookup_id(3))
+    print(aq.lookup_index('1.0-5.0-1.0'))
+
 
 if __name__ == '__main__':
     main()
