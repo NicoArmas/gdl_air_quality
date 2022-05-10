@@ -17,6 +17,9 @@ class TemporalDataBuilder():
     def build(self):
 
         final = pd.read_csv('data\\final.csv')
+        final.drop(['Unnamed: 0.3'], axis=1, inplace=True)
+        final.drop(['Unnamed: 0.2'], axis=1, inplace=True)
+        final.drop(['Unnamed: 0.1'], axis=1, inplace=True)
         final.drop(['Unnamed: 0'], axis=1, inplace=True)
         final = self.change_indexes_2(final)
         final.drop(['index'], axis=1, inplace=True)
