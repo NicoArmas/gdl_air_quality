@@ -6,27 +6,47 @@ import os
 
 from tsl.utils import download_url, extract_zip
 
+
 class TemporalDataBuilder():
 
-    def __init__(self):
+    def __init__(self, data_dir = 'data'):
 
-        self.dataset = self.build()
+        self.nodes_to_keep = None
+        self.data_dir = data_dir
+        self.ds_dir = f'{self.data_dir}\\final.pk'
+
+        if not os.path.exists(self.ds_dir):
+            self.dataset = self.build()
+        else:
+            self.dataset = pd.read_pickle(self.ds_dir)
     
    
 
     def build(self):
 
-        final = pd.read_csv('data\\final.csv')
+        final = pd.read_csv(f'{self.data_dir}\\final.csv')
         final.drop(['Unnamed: 0.3'], axis=1, inplace=True)
         final.drop(['Unnamed: 0.2'], axis=1, inplace=True)
         final.drop(['Unnamed: 0.1'], axis=1, inplace=True)
         final.drop(['Unnamed: 0'], axis=1, inplace=True)
+        final.drop(columns=['CO','SO2','NO2','PM10'], axis=1, inplace=True)
         final = self.change_indexes_2(final)
         final.drop(['index'], axis=1, inplace=True)
         final['uniqueid'] = final.apply(lambda row: self.obtain_id(row), axis=1)
 
         new_final = self.final_operations(final)
         new_final.index = pd.DatetimeIndex(new_final.index, freq='H')
+
+        self.nodes_to_keep = []
+
+        for node in new_final.columns.get_level_values(0).drop_duplicates():
+            keep = self.keep_node(new_final, node)
+            if keep:
+                self.nodes_to_keep.append(node)
+
+        new_final = new_final.loc[:, self.nodes_to_keep]
+
+        new_final.to_pickle(f'{self.data_dir}\\final.pk')
 
         return new_final
 
@@ -98,6 +118,17 @@ class TemporalDataBuilder():
         new_final = new_final.swaplevel(i = 0, j = -1, axis=1)
 
         return new_final
+
+    def keep_node(self, df, node):
+      
+        pm25 = df.loc[:, node]['PM25']
+        pm25_nans = pm25.isna().sum()
+        pm25_perc = round((pm25_nans/len(pm25))*100, 2)
+
+        if pm25_perc < 90:
+            return True
+        else: 
+            return False
 
     def build_complete(self):
         

@@ -1,11 +1,11 @@
+from operator import is_
 from tracemalloc import start
 from airquality import AirQuality
 
 
 def main():
-    aq = AirQuality()
-    print(aq.lookup_id(3))
-    print(aq.lookup_index('1.0-5.0-1.0'))
+    aq = AirQuality(is_subgraph=True, sub_start='6.0-73.0-1201.0', sub_size=100)
+    print(aq)
 
 
 if __name__ == '__main__':

@@ -5,17 +5,18 @@ import csv
 import os
 from re import sub
 from tracemalloc import start
-from idna import valid_contextj
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+from idna import valid_contextj
+from matplotlib.pyplot import close
 from tqdm import tqdm
-from tsl.ops.similarities import geographical_distance
+from tsl.data.datamodule.splitters import Splitter, disjoint_months
+from tsl.datasets.prototypes import PandasDataset
+from tsl.ops.similarities import gaussian_kernel, geographical_distance
 from tsl.utils import download_url, extract_zip
 
-from tsl.datasets.prototypes import PandasDataset
 from temporal_builder import TemporalDataBuilder
-
 
 DATA_DIR_PATH = 'data'
 
@@ -58,6 +59,40 @@ def infer_mask(df, infer_from='next'):
         eval_mask.loc[i_idx] = ~mask_i.loc[i_idx] & mask.loc[i_idx]
     return eval_mask
 
+class AirQualitySplitter(Splitter):
+
+    def __init__(self, val_len: int = None,
+                 test_months = (3, 6, 9, 12)):
+        super(AirQualitySplitter, self).__init__()
+        self._val_len = val_len
+        self.test_months = test_months
+
+    def fit(self, dataset):
+        nontest_idxs, test_idxs = disjoint_months(dataset,
+                                                  months=self.test_months,
+                                                  synch_mode=HORIZON)
+        # take equal number of samples before each month of testing
+        val_len = self._val_len
+        if val_len < 1:
+            val_len = int(val_len * len(nontest_idxs))
+        val_len = val_len // len(self.test_months)
+        # get indices of first day of each testing month
+        delta = np.diff(test_idxs)
+        delta_idxs = np.flatnonzero(delta > delta.min())
+        end_month_idxs = test_idxs[1:][delta_idxs]
+        if len(end_month_idxs) < len(self.test_months):
+            end_month_idxs = np.insert(end_month_idxs, 0, test_idxs[0])
+        # expand month indices
+        month_val_idxs = [np.arange(v_idx - val_len, v_idx) - dataset.window
+                          for v_idx in end_month_idxs]
+        val_idxs = np.concatenate(month_val_idxs) % len(dataset)
+        # remove overlapping indices from training set
+        ovl_idxs, _ = dataset.overlapping_indices(nontest_idxs, val_idxs,
+                                                  synch_mode=HORIZON,
+                                                  as_mask=True)
+        train_idxs = nontest_idxs[~ovl_idxs]
+        self.set_indices(train_idxs, val_idxs, test_idxs)
+
 
 class AirQuality(PandasDataset):
 
@@ -76,43 +111,54 @@ class AirQuality(PandasDataset):
         self.red_sites_df = None
         self.dist_mat = None
 
+        self.temporal = TemporalDataBuilder()
+        self.dataset = self.temporal.dataset
+        self.is_subgraph = is_subgraph
+        self.sub_nodes = None
+
         self.data_path = DATA_DIR_PATH
         self.sites_path = f'{self.data_path}\\aqs_sites.csv'
         self.red_sites_path = f'{self.data_path}\\aqs_sites_reduced.csv'
         self.dist_mat_path = f'{self.data_path}\\dist_matrix.npy'
 
-        self.init_build(overwrite_data)
 
-        self.temporal = TemporalDataBuilder()
-        self.dataset = self.temporal.dataset
-        self.is_subgraph = is_subgraph
-        self.sub_nodes = None
+        self.infer_eval_from = 'next'
+
+
+        self.init_build(overwrite_data, self.temporal.nodes_to_keep)
+
+
         
         if self.is_subgraph:
             self.sub_nodes = self.get_closest_nodes(sub_start, sub_size)
-            self.dataset = self.slice_data(self.sub_nodes)
+            self.dataset, self.dist_mat = self.slice_data(self.sub_nodes)
+
+        mask, eval_mask = self.create_masks()
 
         super().__init__(dataframe=self.dataset,
                          attributes=dict(dist=self.dist_mat),
+                         mask=mask,
                          similarity_score="distance",
                          spatial_aggregation="mean",
-                         temporal_aggregation="nearest",
+                         temporal_aggregation="mean",
+                         default_splitting_method='air_quality',
                          name="AQ")
   
-    def init_build(self, overwrite):
+    def init_build(self, overwrite, nodes_to_keep):
         
         built_dist, built_sites = self.valid_build()
 
         if built_dist and built_sites and not overwrite:
             
-            print("Found a valid build, loading...")
-
+            print("Found a valid build, loading... ", end = '')
             self.load_datasets()
+            print("\tDONE!")
+
         
         else:
             if not built_sites:
                 self.download_sites_data(self.sites_url)
-                self.sites_df, self.red_sites_df = self.prepare_sites_data()
+                self.sites_df, self.red_sites_df = self.prepare_sites_data(nodes_to_keep)
                 if built_dist:
                     self.dist_mat = pd.DataFrame(np.load(self.dist_mat_path, allow_pickle=True))
             
@@ -141,15 +187,20 @@ class AirQuality(PandasDataset):
             print("Sites list download completed!")
         else: print("File already present, skipped sites list download")      
 
-    def prepare_sites_data(self):
+    def prepare_sites_data(self, nodes_to_keep):
         print("Preparing sites data... ", end='')
         sites_full = pd.read_csv(self.sites_path)
         sites_red = sites_full.loc[:, "State Code":"Longitude"]
         sites_red.insert(0, 'ID', value= None)
-        sites_red.insert(0, 'Index', value=[i for i in range(sites_red.shape[0])])
+        
 
         sites_red = generate_id(sites_red)
         sites_red.drop(columns=['State Code', 'County Code', 'Site Number'], inplace=True)
+        sites_red = sites_red.set_index('ID')
+        sites_red = sites_red.loc[nodes_to_keep]
+        sites_red = sites_red.reset_index(level='ID')
+        sites_red.insert(0, 'Index', value=[i for i in range(sites_red.shape[0])])
+
 
         filename = self.red_sites_path
 
@@ -188,9 +239,9 @@ class AirQuality(PandasDataset):
                 closest_nodes -- a list of N nodes which are the closest 
                       ones to the starting node       
         """
-        
-        closest_dist = self.dist_mat.loc[:, [start_node]]
-        closest_dist = (closest_dist.sort_values(by=[start_node]))[:n_nodes]
+        start_node = self.lookup_index(start_node)
+        closest_dist = self.dist_mat.iloc[:, start_node]
+        closest_dist = (closest_dist.sort_values())[:n_nodes]
         
         closest_nodes = list(closest_dist.index)
         closest_nodes.sort()
@@ -198,22 +249,46 @@ class AirQuality(PandasDataset):
         return closest_nodes
 
     def slice_data(self, nodes):
-        return self.dataset.loc[:, nodes]
-    
 
-    # def create_subgraph(self, start_node, size):
+        nodes_ids = [self.lookup_id(n) for n in nodes]
 
-    #     nodes = self.get_closest_nodes(start_node, size)
-    
-    #     return AirQualityGraph(nodes, self.dist_mat, self.red_sites_df)
+        data = self.dataset.loc[: , (nodes_ids, 'PM25')]       
+        dist = self.dist_mat.loc[nodes, nodes]
+        return data, dist
 
-    def lookup_id(self, id):
+    def lookup_index(self, id):
         df = self.red_sites_df
-        return (df.loc[lambda df: df['ID'] == id])['Index']
+        return (df.loc[df['ID'] == id])['Index'].item()
 
-    def lookup_index(self, index):
+    def lookup_id(self, index):
         df = self.red_sites_df
-        return (df.loc[lambda df: df['Index'] == index])['ID']
+        return (df.loc[df['Index'] == index])['ID'].item()
+
+    def create_masks(self):
+        mask = (~np.isnan(self.dataset.values)).astype('uint8')  # 1 if value is valid
+        
+        eval_mask = infer_mask(self.dataset, infer_from=self.infer_eval_from)
+        # 1 if value is ground-truth for imputation
+        eval_mask = eval_mask.values.astype('uint8')
+        # eventually replace nans with weekly mean by hour
+        
+        return mask, eval_mask
+
+    def get_splitter(self, method = None, **kwargs):
+        if method == 'air_quality':
+            val_len = kwargs.get('val_len')
+            return AirQualitySplitter(test_months=self.test_months,
+                                      val_len=val_len)
+
+    def compute_similarity(self, method, **kwargs):
+        if method == "distance":
+            finite_dist = self.dist_mat.to_numpy().reshape(-1)
+            finite_dist = finite_dist[~np.isinf(finite_dist)]
+            sigma = finite_dist.std()
+            return gaussian_kernel(self.dist_mat.to_numpy(), sigma)
+
+
+
     
 
 
@@ -233,37 +308,22 @@ def generate_id(df):
 
 
 
-# class AirQualityGraph():
-#     def __init__(self, nodes, full_dm, full_sites):
-        
-#         self.nodes = nodes
-#         self.size = len(nodes) 
+def main():
+    dataset = AirQuality(is_subgraph=True, sub_start='6.0-73.0-1201.0', sub_size=100)
+    print(dataset)
 
-#         self.full_sites = full_sites
+    print(f"Sampling period: {dataset.freq}\n"
+      f"Has missing values: {dataset.has_mask}\n"
+      f"Percentage of missing values: {(1 - dataset.mask.mean()) * 100:.2f}%\n"
+      f"Has dataset exogenous variables: {dataset.has_exogenous}\n"
+      f"Relevant attributes: {', '.join(dataset.attributes.keys())}")
 
-#         self.sites_df = None
-#         self.dist_mat = None
-        
-#         self.gen_graph_sites(full_sites)
-#         self.gen_dist_mat(full_dm)
-        
+    print(f"Default similarity: {dataset.similarity_score}\n"
+      f"Available similarity options: {dataset.similarity_options}\n")
 
-#     def gen_graph_sites(self, full_s):
-
-#         self.sites_df = full_s.loc[self.nodes]
-        
-
-#     def gen_dist_mat(self, full_dm):
-        
-#         self.dist_mat = full_dm.loc[self.nodes, self.nodes]
+    sim = dataset.get_similarity("distance")  # same as dataset.get_similarity()
+    print(sim[:10, :10])  # just check first 10 nodes for readability
 
 
-#     def get_graph_size(self):
-#         """ Return the number of nodes in the graph.
-#         """
-#         return self.size
-
-#     def print_info(self):
-#         print(f'Size: {self.size}')
-#         print(f'Nodes: {self.nodes}')
-#         print(f'Dist. matrix: \n {self.dist_mat}')
+if __name__ == '__main__':
+    main()
