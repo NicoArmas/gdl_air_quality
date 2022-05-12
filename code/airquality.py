@@ -9,6 +9,8 @@ from tracemalloc import start
 import numpy as np
 import pandas as pd
 from idna import valid_contextj
+from tsl.ops.dataframe import compute_mean
+
 from matplotlib.pyplot import close
 from tqdm import tqdm
 from tsl.data.datamodule.splitters import Splitter, disjoint_months
@@ -18,6 +20,8 @@ from tsl.utils import download_url, extract_zip
 
 from temporal_builder import TemporalDataBuilder
 from tsl.data.utils import HORIZON
+
+import pathlib
 
 
 
@@ -123,10 +127,10 @@ class AirQuality(PandasDataset):
         self.is_subgraph = is_subgraph
         self.sub_nodes = None
 
-        self.data_path = data_dir
-        self.sites_path = f'{self.data_path}\\aqs_sites.csv'
-        self.red_sites_path = f'{self.data_path}\\aqs_sites_reduced.csv'
-        self.dist_mat_path = f'{self.data_path}\\dist_matrix.npy'
+        self.data_path = pathlib.Path(data_dir)
+        self.sites_path =  pathlib.Path(f'{self.data_path}/aqs_sites.csv')
+        self.red_sites_path = pathlib.Path(f'{self.data_path}/aqs_sites_reduced.csv')
+        self.dist_mat_path = pathlib.Path(f'{self.data_path}/dist_matrix.npy')
 
 
         self.infer_eval_from = 'next'
@@ -188,7 +192,7 @@ class AirQuality(PandasDataset):
 
     def download_sites_data(self, url):
         print("Downloading sites list... ", end = '')
-        filename = 'aqs_sites.csv'
+        filename = self.sites_path
         if not os.path.exists(filename):
             download_url(url, self.data_path, filename)            
             print("Sites list download completed!")
@@ -271,12 +275,14 @@ class AirQuality(PandasDataset):
         df = self.red_sites_df
         return (df.loc[df['Index'] == index])['ID'].item()
 
-    def create_masks(self):
+    def create_masks(self, impute_nans = True):
         mask = (~np.isnan(self.dataset.values)).astype('uint8')  # 1 if value is valid
         
         eval_mask = infer_mask(self.dataset, infer_from=self.infer_eval_from)
         # 1 if value is ground-truth for imputation
         eval_mask = eval_mask.values.astype('uint8')
+        if impute_nans:
+            self.dataset = self.dataset.fillna(compute_mean(self.dataset))
         # eventually replace nans with weekly mean by hour
         
         return mask, eval_mask

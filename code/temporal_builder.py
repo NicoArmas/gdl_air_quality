@@ -5,6 +5,7 @@ import datetime as dt
 import os
 
 from tsl.utils import download_url, extract_zip
+import pathlib
 
 
 class TemporalDataBuilder():
@@ -12,19 +13,20 @@ class TemporalDataBuilder():
     def __init__(self, data_dir = 'data'):
 
         self.nodes_to_keep = None
-        self.data_dir = data_dir
-        self.ds_dir = f'{self.data_dir}\\final.pk'
+        self.data_dir = pathlib.Path(data_dir)
+        self.pk_dir = pathlib.Path(f'{self.data_dir}/final.pk')
+        self.csv_dir = pathlib.Path(f'{self.data_dir}/final.csv')
 
-        if not os.path.exists(self.ds_dir):
+        if not os.path.exists(self.pk_dir):
             self.dataset = self.build()
         else:
-            self.dataset = pd.read_pickle(self.ds_dir)
+            self.dataset = pd.read_pickle(self.pk_dir)
     
    
 
     def build(self):
 
-        final = pd.read_csv(f'{self.data_dir}\\final.csv')
+        final = pd.read_csv(self.csv_dir)
         final.drop(['Unnamed: 0.3'], axis=1, inplace=True)
         final.drop(['Unnamed: 0.2'], axis=1, inplace=True)
         final.drop(['Unnamed: 0.1'], axis=1, inplace=True)
@@ -46,7 +48,7 @@ class TemporalDataBuilder():
 
         new_final = new_final.loc[:, self.nodes_to_keep]
 
-        new_final.to_pickle(f'{self.data_dir}\\final.pk')
+        new_final.to_pickle(self.pk_dir)
 
         return new_final
 
@@ -129,17 +131,7 @@ class TemporalDataBuilder():
             return True
         else: 
             return False
-
-    def build_complete(self):
-        
-        temp_dir = os.mkdir('../data/raw')
-        raw_url = ''
-
-        filename = 'raw_data.zip' 
-        if not os.path.exists(temp_dir):
-            download_url(raw_url, temp_dir, filename)            
-            print("Raw data download completed!")
-        else: print("File already present, skipped " + filename)      
+   
 
         # #OPEN DFS for all elements
 

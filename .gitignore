@@ -3,6 +3,7 @@
 data/
 data_backup/
 .idea/
+.vscode/
 **/__pycache__
 
 # Ignore Files
