@@ -17,8 +17,8 @@ from tsl.ops.similarities import gaussian_kernel, geographical_distance
 from tsl.utils import download_url, extract_zip
 
 from temporal_builder import TemporalDataBuilder
+from tsl.data.utils import HORIZON
 
-DATA_DIR_PATH = 'data'
 
 
 def infer_mask(df, infer_from='next'):
@@ -71,26 +71,38 @@ class AirQualitySplitter(Splitter):
         nontest_idxs, test_idxs = disjoint_months(dataset,
                                                   months=self.test_months,
                                                   synch_mode=HORIZON)
+        print("Nontest-test idxs: ", nontest_idxs, test_idxs)
         # take equal number of samples before each month of testing
         val_len = self._val_len
         if val_len < 1:
             val_len = int(val_len * len(nontest_idxs))
         val_len = val_len // len(self.test_months)
+        print("new val len ", val_len)
         # get indices of first day of each testing month
         delta = np.diff(test_idxs)
+        print('delta ', delta)
         delta_idxs = np.flatnonzero(delta > delta.min())
+        print('delta idxs ', delta_idxs)
         end_month_idxs = test_idxs[1:][delta_idxs]
+        print('end month idxs ', end_month_idxs)
+
         if len(end_month_idxs) < len(self.test_months):
             end_month_idxs = np.insert(end_month_idxs, 0, test_idxs[0])
         # expand month indices
         month_val_idxs = [np.arange(v_idx - val_len, v_idx) - dataset.window
                           for v_idx in end_month_idxs]
+        print('month val idxs ', month_val_idxs)
+
         val_idxs = np.concatenate(month_val_idxs) % len(dataset)
+        print('val idxs ', val_idxs)
+
         # remove overlapping indices from training set
         ovl_idxs, _ = dataset.overlapping_indices(nontest_idxs, val_idxs,
                                                   synch_mode=HORIZON,
                                                   as_mask=True)
+        print('ovl_indxs ', ovl_idxs)
         train_idxs = nontest_idxs[~ovl_idxs]
+        print('train idxs ', train_idxs)
         self.set_indices(train_idxs, val_idxs, test_idxs)
 
 
@@ -103,7 +115,9 @@ class AirQuality(PandasDataset):
     def __init__(self,  overwrite_data = False, 
                         is_subgraph = False, 
                         sub_start = None, 
-                        sub_size = 0):
+                        sub_size = 0,
+                        data_dir ='data',
+                        test_months = (3, 6, 9, 12)):
 
         self.sites_url = "https://drive.switch.ch/index.php/s/hJN6mvHd13puOIa/download"
 
@@ -111,12 +125,14 @@ class AirQuality(PandasDataset):
         self.red_sites_df = None
         self.dist_mat = None
 
-        self.temporal = TemporalDataBuilder()
+        self.test_months = test_months
+
+        self.temporal = TemporalDataBuilder(data_dir=data_dir)
         self.dataset = self.temporal.dataset
         self.is_subgraph = is_subgraph
         self.sub_nodes = None
 
-        self.data_path = DATA_DIR_PATH
+        self.data_path = data_dir
         self.sites_path = f'{self.data_path}\\aqs_sites.csv'
         self.red_sites_path = f'{self.data_path}\\aqs_sites_reduced.csv'
         self.dist_mat_path = f'{self.data_path}\\dist_matrix.npy'
@@ -277,6 +293,7 @@ class AirQuality(PandasDataset):
     def get_splitter(self, method = None, **kwargs):
         if method == 'air_quality':
             val_len = kwargs.get('val_len')
+            print(self.test_months)
             return AirQualitySplitter(test_months=self.test_months,
                                       val_len=val_len)
 
