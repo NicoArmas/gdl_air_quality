@@ -71,38 +71,29 @@ class AirQualitySplitter(Splitter):
         nontest_idxs, test_idxs = disjoint_months(dataset,
                                                   months=self.test_months,
                                                   synch_mode=HORIZON)
-        print("Nontest-test idxs: ", nontest_idxs, test_idxs)
         # take equal number of samples before each month of testing
         val_len = self._val_len
         if val_len < 1:
             val_len = int(val_len * len(nontest_idxs))
         val_len = val_len // len(self.test_months)
-        print("new val len ", val_len)
         # get indices of first day of each testing month
         delta = np.diff(test_idxs)
-        print('delta ', delta)
         delta_idxs = np.flatnonzero(delta > delta.min())
-        print('delta idxs ', delta_idxs)
         end_month_idxs = test_idxs[1:][delta_idxs]
-        print('end month idxs ', end_month_idxs)
 
         if len(end_month_idxs) < len(self.test_months):
             end_month_idxs = np.insert(end_month_idxs, 0, test_idxs[0])
         # expand month indices
         month_val_idxs = [np.arange(v_idx - val_len, v_idx) - dataset.window
                           for v_idx in end_month_idxs]
-        print('month val idxs ', month_val_idxs)
 
         val_idxs = np.concatenate(month_val_idxs) % len(dataset)
-        print('val idxs ', val_idxs)
 
         # remove overlapping indices from training set
         ovl_idxs, _ = dataset.overlapping_indices(nontest_idxs, val_idxs,
                                                   synch_mode=HORIZON,
                                                   as_mask=True)
-        print('ovl_indxs ', ovl_idxs)
         train_idxs = nontest_idxs[~ovl_idxs]
-        print('train idxs ', train_idxs)
         self.set_indices(train_idxs, val_idxs, test_idxs)
 
 
