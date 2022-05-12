@@ -29,7 +29,7 @@ class AirQualityModel(nn.Module):
                  window_size,
                  horizon,
                  num_heads=8,
-                 n_sp_layers=2,
+                 n_sp_layers=5,
                  n_tp_layers=1):
 
         super(AirQualityModel, self).__init__()
@@ -48,26 +48,22 @@ class AirQualityModel(nn.Module):
         self.activation = get_functional_activation('relu')
         self.upscale = nn.Linear(self.input_size, self.hidden_size)
 
+        #spatial layers 1
+        self.spatialSeq1 = nn.ModuleList()
+        for _ in range(self.n_sp_layers):
+            self.spatialSeq1.append(SpatialModel(self.hidden_size))
+
         # temporal layers
         self.temporalSeq = nn.ModuleList()
-
         for _ in range(self.n_tp_layers):
             self.temporalSeq.append(TemporalSelfAttention(self.hidden_size, self.num_heads))
 
-        self.augmented_size = self.hidden_size + self.input_size
-
-        # spatial layers
-        self.spatialSeq = nn.ModuleList()
-
-        # self.spatialSeq = GatedGraphNetwork(self.hidden_size, self.hidden_size)
-
+        # spatial layers 2
+        self.spatialSeq2 = nn.ModuleList()
         for _ in range(self.n_sp_layers):
-            self.spatialSeq.append(SpatialModel(self.augmented_size))
+            self.spatialSeq2.append(SpatialModel(self.hidden_size))
 
-        # self.spatialSeq2 = nn.ModuleList()
-
-        # for _ in range(self.n_sp_layers):
-        #    self.spatialSeq2.append(SpatialModel(self.aug_size))
+        self.augmented_size = self.hidden_size + self.input_size
 
         self.conv_layer = nn.Conv2d(self.window_size, self.horizon, 1)
         self.output_layer = MLP(self.augmented_size, self.hidden_size, self.output_size)
@@ -77,23 +73,20 @@ class AirQualityModel(nn.Module):
         input = self.upscale(x)
         input = self.activation(input)
 
+        for i in range(self.n_sp_layers):
+            input = self.spatialSeq1[i](input, edge_index)
+
+        input = self.activation(input)
+
         for i in range(self.n_tp_layers):
             input, _ = self.temporalSeq[i](input)
 
-        input = torch.cat([input, x], dim=-1)
-
         for i in range(self.n_sp_layers):
-            input = self.spatialSeq[i](input, edge_index)
-
-        # prova ad appendere l input anche qua!
-        # input = torch.cat([input, x], dim=-1)
-
-        # for i in range(self.n_sp_layers):
-        #    input = self.spatialSeq2[i](input, edge_index)
-
-        # input = torch.cat([input, x], dim=-1)
+            input = self.spatialSeq2[i](input, edge_index)
 
         input = self.activation(input)
+
+        input = torch.cat([input, x], dim=-1)
         output = self.conv_layer(input)
         output = self.output_layer(output)
 
@@ -105,7 +98,7 @@ if __name__ == '__main__':
     import numpy as np
 
     from airquality import AirQuality as AQ
-    dataset =AQ(is_subgraph=True, sub_start='6.0-73.0-1201.0', sub_size=100)
+    dataset =AQ(is_subgraph=True, sub_start='6.0-73.0-1201.0', sub_size=100, data_dir='../data')
 
     # from tsl.datasets import AirQuality as AQ
 
@@ -150,7 +143,7 @@ if __name__ == '__main__':
         dataset=torch_dataset,
         scalers=scalers,
         splitter=splitter,
-        batch_size=8,  # era 64!
+        batch_size=4,  # era 64!
     )
 
     dm.setup()
@@ -195,7 +188,7 @@ if __name__ == '__main__':
         mode='min',
     )
     
-    trainer = pl.Trainer(max_epochs=20,
+    trainer = pl.Trainer(max_epochs=300,
                          gpus=1 if torch.cuda.is_available() else None,
                          # limit_train_batches=100,
                          callbacks=[checkpoint_callback])
