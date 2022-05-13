@@ -5,7 +5,7 @@ from tsl.nn.layers.temporal_attention import TemporalSelfAttention
 from tsl.nn.utils.utils import get_functional_activation
 from tsl.nn.blocks.encoders.mlp import MLP
 
-from tsl.nn.models import TransformerModel
+from tsl.nn.models import TCNModel
 
 import tsl
 import torch
@@ -13,7 +13,7 @@ import numpy as np
 
 from airquality import AirQuality as AQ
 
-dataset = AQ(is_subgraph=True, sub_start='6.0-73.0-1201.0', sub_size=100, data_dir='../data')
+dataset = AQ(is_subgraph=True, sub_start='6.0-27.0-2.0', sub_size=100, data_dir='../data')
 
 
 adj = dataset.get_connectivity(threshold=0.1,
@@ -47,29 +47,36 @@ dm = SpatioTemporalDataModule(
     dataset=torch_dataset,
     scalers=scalers,
     splitter=splitter,
-    batch_size=64,  #era 64!
+    batch_size=512,  #era 64!
 )
 
 dm.setup()
 
-from tsl.nn.metrics.metrics import MaskedMAE, MaskedMAPE
+from tsl.nn.metrics.metrics import MaskedMAE, MaskedMAPE, MaskedMSE, MaskedMRE
 from tsl.predictors import Predictor
 
 loss_fn = MaskedMAE(compute_on_step=True)
 
 metrics = {'mae': MaskedMAE(compute_on_step=False),
+           'mse': MaskedMSE(compute_on_step=False),
+           'mre': MaskedMRE(compute_on_step=False),
            'mape': MaskedMAPE(compute_on_step=False)}
 
 model_kwargs = {
-    'input_size': 1,
-    'hidden_size': 63,   #era trentadue ma non andava per la divisibilita probabilemnte ce un problema con input_size_sp era 31
-    'window_size': 24, #era 12
-    'horizon': 1
+            'input_size':1,
+            'hidden_size':32,
+            'ff_size':32,
+            'output_size':1,
+            'horizon':1,
+            'kernel_size':2,
+            'n_layers':4,
+            'exog_size':0
 }
+
 
 # setup predictor
 predictor = Predictor(
-    model_class=TransformerModel,
+    model_class=TCNModel,
     model_kwargs=model_kwargs,
     optim_class=torch.optim.Adam,
     optim_kwargs={'lr': 0.001}, #0.001
@@ -87,11 +94,16 @@ checkpoint_callback = ModelCheckpoint(
     mode='min',
 )
 
-trainer = pl.Trainer(max_epochs=100,
+trainer = pl.Trainer(max_epochs=30,
                      #logger=logger,
                      gpus=1 if torch.cuda.is_available() else None,
                     #limit_train_batches=100,
                      callbacks=[checkpoint_callback])
 
 trainer.fit(predictor, datamodule=dm)
+
+predictor.load_model(checkpoint_callback.best_model_path)
+predictor.freeze()
+
+performance = trainer.test(predictor, datamodule=dm)
 
