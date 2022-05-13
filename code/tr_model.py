@@ -52,12 +52,14 @@ dm = SpatioTemporalDataModule(
 
 dm.setup()
 
-from tsl.nn.metrics.metrics import MaskedMAE, MaskedMAPE
+from tsl.nn.metrics.metrics import MaskedMAE, MaskedMAPE, MaskedMSE, MaskedMRE
 from tsl.predictors import Predictor
 
 loss_fn = MaskedMAE(compute_on_step=True)
 
 metrics = {'mae': MaskedMAE(compute_on_step=False),
+           'mse': MaskedMSE(compute_on_step=False),
+           'mre': MaskedMRE(compute_on_step=False),
            'mape': MaskedMAPE(compute_on_step=False)}
 
 model_kwargs = {
@@ -92,7 +94,7 @@ checkpoint_callback = ModelCheckpoint(
     mode='min',
 )
 
-trainer = pl.Trainer(max_epochs=300,
+trainer = pl.Trainer(max_epochs=30,
                      #logger=logger,
                      gpus=1 if torch.cuda.is_available() else None,
                     #limit_train_batches=100,
