@@ -69,6 +69,13 @@ class AirQualityModel(nn.Module):
         self.output_layer = MLP(self.augmented_size, self.hidden_size, self.output_size)
 
     def forward(self, x, edge_index=None, **kwargs):
+        """
+        The function takes in a 4D tensor (x) and returns a 4D tensor (output)
+        
+        :param x: [batch size, timestep, nodes, channels]
+        :param edge_index: [2, num_edges]
+        :return: The output of the model.
+        """
         # x: [batch size, timestep, nodes, channels]
         input = self.upscale(x)
         input = self.activation(input)

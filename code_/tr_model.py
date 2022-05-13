@@ -13,7 +13,7 @@ import numpy as np
 
 from airquality import AirQuality as AQ
 
-dataset = AQ(is_subgraph=True, sub_start='6.0-27.0-2.0', sub_size=100, data_dir='../data')
+dataset = AQ(is_subgraph=True, sub_start='6.0-79.0-8002.0', sub_size=70, data_dir='../data')
 
 
 adj = dataset.get_connectivity(threshold=0.1,
@@ -94,7 +94,7 @@ checkpoint_callback = ModelCheckpoint(
     mode='min',
 )
 
-trainer = pl.Trainer(max_epochs=30,
+trainer = pl.Trainer(max_epochs=100,
                      #logger=logger,
                      gpus=1 if torch.cuda.is_available() else None,
                     #limit_train_batches=100,
