@@ -12,43 +12,65 @@ class TemporalDataBuilder():
 
     def __init__(self, data_dir = 'data'):
 
-        self.nodes_to_keep = None
+        self.nodes_to_keep = []
         self.data_dir = pathlib.Path(data_dir)
         self.pk_dir = pathlib.Path(f'{self.data_dir}/final.pk')
-        self.csv_dir = pathlib.Path(f'{self.data_dir}/final.csv')
+        self.csv_dir = pathlib.Path(f'{self.data_dir}/final2.csv')
 
         if not os.path.exists(self.pk_dir):
+            print("Starting build for temporal data... ")
             self.dataset = self.build()
+            print("\tDONE!")
+
+
         else:
+
+            print("Found temporal data pickle, loading...", end = '')
             self.dataset = pd.read_pickle(self.pk_dir)
+            self.select_optimal_nodes(self.dataset)
+            print("\tDONE!")
     
    
 
     def build(self):
 
+       
+        print("\tReading temporal data CSV... ", end='')
+
         final = pd.read_csv(self.csv_dir)
-        final.drop(['Unnamed: 0.3'], axis=1, inplace=True)
-        final.drop(['Unnamed: 0.2'], axis=1, inplace=True)
-        final.drop(['Unnamed: 0.1'], axis=1, inplace=True)
-        final.drop(['Unnamed: 0'], axis=1, inplace=True)
-        final.drop(columns=['CO','SO2','NO2','PM10'], axis=1, inplace=True)
+
+        print("\tDONE!")
+
+        print("\tConstructing dataset multiindex... ", end='')
+
+        #final.drop(['Unnamed: 0'], axis=1, inplace=True)
         final = self.change_indexes_2(final)
         final.drop(['index'], axis=1, inplace=True)
         final['uniqueid'] = final.apply(lambda row: self.obtain_id(row), axis=1)
+        print("\tDONE!")
+
+
+        print("\tPerforming final operations on the dataset... ", end='')
 
         new_final = self.final_operations(final)
         new_final.index = pd.DatetimeIndex(new_final.index, freq='H')
+        print("\tDONE!")
 
-        self.nodes_to_keep = []
+        print("\tSelecting relevant data (PM25 NaNs < 90%)... ", end='')
 
-        for node in new_final.columns.get_level_values(0).drop_duplicates():
-            keep = self.keep_node(new_final, node)
-            if keep:
-                self.nodes_to_keep.append(node)
+        self.select_optimal_nodes(new_final)
+
+        print("\tDONE!")
+
+
 
         new_final = new_final.loc[:, self.nodes_to_keep]
+        print("\tSaving obtained data to pickle... ", end='')
+
 
         new_final.to_pickle(self.pk_dir)
+        print("\tDONE!")
+
 
         return new_final
 
@@ -120,6 +142,13 @@ class TemporalDataBuilder():
         new_final = new_final.swaplevel(i = 0, j = -1, axis=1)
 
         return new_final
+
+    def select_optimal_nodes(self, df):
+
+        for node in df.columns.get_level_values(0).drop_duplicates():
+            keep = self.keep_node(df, node)
+            if keep:
+                self.nodes_to_keep.append(node)
 
     def keep_node(self, df, node):
       
