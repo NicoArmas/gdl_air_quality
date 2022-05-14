@@ -33,8 +33,9 @@ def batchify(features, label, batch_dim):
 
 
 # convert pandas to tensor (index is cut out automatically)
-def prepare_data(df, batch_dim=64):
+def prepare_data(df, batch_dim=64, DEVICE='cuda'):
     tens = Tensor(df.values)
+    tens = tens.to(DEVICE)
     X, Y = tens[:, :-1], tens[:, -1]
     X = normalize(X)  # normalize per columns
     # training 0.7, val 0.15, test 0.15

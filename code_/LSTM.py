@@ -11,26 +11,26 @@ from torch.nn import L1Loss
 # We have an embedding layer, an LSTM layer, and a fully connected layer
 class LSTMModel(nn.Module):
 
-    def __init__(self, embeed_dim, lstm_dim, num_layers, input_dim, output_dim):
+    def __init__(self, hidden_size, lstm_dim, num_layers, input_dim, output_dim):
         """
-        The function takes in the input dimension, embedding dimension, LSTM dimension, number of layers, and output
-        dimension. It then creates an embedding layer, an LSTM layer, and a fully connected layer
+        The function takes in the input dimension, the hidden dimension, the LSTM dimension, the number of layers, and the
+        output dimension. It then creates an embedding layer, an LSTM layer, and a fully connected layer
 
-        :param embeed_dim: the size of the embedding vector
+        :param hidden_size: the number of features in the hidden state h
         :param lstm_dim: the number of hidden units in the LSTM cell
         :param num_layers: number of layers in the LSTM
-        :param input_dim: the size of the vocabulary
+        :param input_dim: the dimension of the input vector
         :param output_dim: the number of classes we have, two in our case (pos/neg)
         """
         super(LSTMModel, self).__init__()
 
         self.input_dim = input_dim
-        self.embeed_dim = embeed_dim
+        self.hidden_size = hidden_size
         self.lstm_dim = lstm_dim
         self.num_layers = num_layers
-        self.Embedding = nn.Embedding(input_dim, embeed_dim)
-        self.LSTM = nn.LSTM(embeed_dim, lstm_dim, num_layers)
-        self.flc = nn.Linear(lstm_dim, output_dim) #qua ritorna una distr di probabilita in cui
+        self.upscale = nn.Linear(input_dim, hidden_size)
+        self.LSTM = nn.LSTM(hidden_size, lstm_dim, num_layers)
+        self.flc = nn.Linear(lstm_dim, output_dim)
 
     def forward(self, x, h, c):
         """
@@ -42,8 +42,8 @@ class LSTMModel(nn.Module):
         :param c: the cell state
         :return: The output of the LSTM layer, and the hidden and cell states of the LSTM layer.
         """
-        embeeded = self.Embedding(x)
-        outputs, (h1, c1) = self.LSTM(embeeded, (h, c))
+        upscaled = self.upscale(x)
+        outputs, (h1, c1) = self.LSTM(upscaled.view(-1, upscaled.shape[0], upscaled.shape[1]), (h, c))
         outputs = self.flc(outputs)
         (h1, c1) = (h1.detach(), c1.detach())
         return outputs, (h1, c1)
@@ -77,20 +77,18 @@ class Trainer():
 
         :param train_x: a list of batches of input data
         :return: The loss of the model
-        """
-        h = torch.zeros(self.model.num_layers, self.model.input_dim, self.model.lstm_dim, device=DEVICE)
-        c = torch.zeros(self.model.num_layers, self.model.input_dim, self.model.lstm_dim, device=DEVICE)
+        """                                #self.model.hidden_size
+        h = torch.zeros(self.model.num_layers, 64, self.model.lstm_dim, device=DEVICE)
+        c = torch.zeros(self.model.num_layers, 64, self.model.lstm_dim, device=DEVICE)
 
-        for inp, lbl in train_x: #train_x contains all the batches
+        for inp, lbl in train_x[:-1]: #train_x contains all the batches
             self.model.train()
             self.optimizer.zero_grad()
             output, (h, c) = self.model(inp, h, c)
-
-            loss = self.loss_fn(output.flatten(end_dim=-2), lbl.flatten()) #da CAMBIARE!
-            print(f'MAE check {self.loss_check(output.flatten(end_dim=-2), lbl.flatten())}') #DA CAMBIARE!
+            #loss = self.loss_fn(output.flatten(end_dim=-2), lbl.view(len(lbl), 1)) #da CAMBIARE!
+            loss = self.loss_check(output.flatten(end_dim=-2), lbl.view(len(lbl), 1))
 
             loss.backward()
-            loss = torch.exp(loss)
 
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             self.optimizer.step()
