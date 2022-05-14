@@ -34,6 +34,15 @@ def batchify(features, label, batch_dim):
 
 # convert pandas to tensor (index is cut out automatically)
 def prepare_data(df, batch_dim=64, DEVICE='cuda'):
+    """
+    It takes a dataframe, converts it to a tensor, normalizes it, splits it into train, validation and test sets, and then
+    creates batches for each of the sets
+
+    :param df: the dataframe
+    :param batch_dim: the number of rows in each batch, defaults to 64 (optional)
+    :param DEVICE: the device to use for training, defaults to cuda (optional)
+    :return: batches_train, batches_valid, batches_test
+    """
     tens = Tensor(df.values)
     tens = tens.to(DEVICE)
     X, Y = tens[:, :-1], tens[:, -1]
