@@ -9,3 +9,4 @@ data_backup/
 # Ignore Files
 
 code_/experiments.ipynb
+code/experiments.ipynb
