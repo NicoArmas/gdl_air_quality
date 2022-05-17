@@ -105,7 +105,7 @@ if __name__ == '__main__':
 
     from airquality import AirQuality as AQ
 
-    dataset = AQ(is_subgraph=True, sub_start='6.0-79.0-8002.0', sub_size=70, data_dir='../data')
+    dataset = AQ(is_subgraph=True, sub_start='6.0-79.0-8002.0', sub_size=70, data_dir='data')
 
     adj = dataset.get_connectivity(threshold=0.1,
                                    include_self=False,
@@ -118,7 +118,7 @@ if __name__ == '__main__':
                                           connectivity=adj,
                                           mask=dataset.mask,
                                           horizon=1,
-                                          window=12)
+                                          window=24)
 
     from tsl.data import SpatioTemporalDataModule
     from tsl.data.preprocessing import StandardScaler
@@ -146,7 +146,7 @@ if __name__ == '__main__':
     model_kwargs = {
         'input_size': 1,
         'hidden_size': 32,
-        'window_size': 12,  # era 12
+        'window_size': 24,  # era 12
         'horizon': 1
     }
 
@@ -162,7 +162,7 @@ if __name__ == '__main__':
 
     from pytorch_lightning.loggers import CSVLogger
 
-    logger = CSVLogger(save_dir='models_data', name='graph_model_[0.001,32,12,1]')
+    logger = CSVLogger(save_dir='models_data', name='graph_model_[0.001,32,24,1]')
 
     import pytorch_lightning as pl
     from pytorch_lightning.callbacks import ModelCheckpoint
