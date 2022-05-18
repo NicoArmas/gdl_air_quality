@@ -17,8 +17,8 @@ class SpatialModel(GatedGraphNetwork):
         return out
 
     def message(self, x_i, x_j, mask_j):
-        mij = self.msg_mlp(torch.cat([x_i, x_j], -1))
-        return self.gate_mlp(mij) * mij
+        mij = self.msg_mlp(torch.cat([x_i, x_j], -1)) #aggregate
+        return self.gate_mlp(mij) * mij #update
 
 
 class AirQualityModel(nn.Module):
@@ -117,8 +117,8 @@ if __name__ == '__main__':
     torch_dataset = SpatioTemporalDataset(*dataset.numpy(return_idx=True),
                                           connectivity=adj,
                                           mask=dataset.mask,
-                                          horizon=1,
-                                          window=12)
+                                          horizon=12,
+                                          window=24)
 
     from tsl.data import SpatioTemporalDataModule
     from tsl.data.preprocessing import StandardScaler
@@ -131,7 +131,7 @@ if __name__ == '__main__':
         dataset=torch_dataset,
         scalers=scalers,
         splitter=splitter,
-        batch_size=32,
+        batch_size=8,
     )
 
     dm.setup()
@@ -146,8 +146,8 @@ if __name__ == '__main__':
     model_kwargs = {
         'input_size': 1,
         'hidden_size': 32,
-        'window_size': 12,  # era 12
-        'horizon': 1
+        'window_size': 24,  # era 12
+        'horizon': 12
     }
 
     # setup predictor
@@ -162,7 +162,7 @@ if __name__ == '__main__':
 
     from pytorch_lightning.loggers import CSVLogger
 
-    logger = CSVLogger(save_dir='models_data', name='graph_model_[0.001,32,12,1]')
+    logger = CSVLogger(save_dir='models_data', name='graph_model_[0.001,32,24,1]h12')
 
     import pytorch_lightning as pl
     from pytorch_lightning.callbacks import ModelCheckpoint
@@ -174,7 +174,7 @@ if __name__ == '__main__':
         mode='min',
     )
 
-    trainer = pl.Trainer(max_epochs=100,
+    trainer = pl.Trainer(max_epochs=50,
                          logger=logger,
                          gpus=1 if torch.cuda.is_available() else None,
                          callbacks=[checkpoint_callback])

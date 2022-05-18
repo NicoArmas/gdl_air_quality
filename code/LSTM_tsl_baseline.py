@@ -44,7 +44,7 @@ from tsl.data import SpatioTemporalDataset
 torch_dataset = SpatioTemporalDataset(*dataset.numpy(return_idx=True),
                                       connectivity=adj,
                                       mask=dataset.mask,
-                                      horizon=1,
+                                      horizon=12,
                                       window=12)
 
 
@@ -77,7 +77,7 @@ model_kwargs = {
     'input_size': 1,  # 1 channel #l input size e il numero di canali!
     'hidden_size': 32, #come trasformo (nota che lo fa per un canale mi conviene usar enumero piu grosso a me che ne ho 8!)
     'rnn_layers': 1,
-    'output_size':1
+    'output_size': 12
 }
 
 
@@ -91,6 +91,10 @@ predictor = Predictor(
     metrics=metrics
 )
 
+from pytorch_lightning.loggers import CSVLogger
+
+logger = CSVLogger(save_dir='models_data', name='NOT CONSIDER') #LSTM_model_hor12
+
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -102,10 +106,10 @@ checkpoint_callback = ModelCheckpoint(
     mode='min',
 )
 
-trainer = pl.Trainer(max_epochs=100,
-                     #logger=logger,
+trainer = pl.Trainer(max_epochs=50,
+                     logger=logger,
                      gpus=1 if torch.cuda.is_available() else None,
-                     limit_train_batches=100,
+                     #limit_train_batches=100,
                      callbacks=[checkpoint_callback])
 
 trainer.fit(predictor, datamodule=dm)

@@ -30,7 +30,7 @@ from tsl.data import SpatioTemporalDataset
 torch_dataset = SpatioTemporalDataset(*dataset.numpy(return_idx=True),
                                       connectivity=adj,
                                       mask=dataset.mask,
-                                      horizon=1,   #li metto gia da qui?
+                                      horizon=12,   #li metto gia da qui?
                                       window=24)   # li metto gia da qui? era 12
 
 #torch_dataset.add_exogenous('mask', dataset.mask)
@@ -57,17 +57,14 @@ from tsl.predictors import Predictor
 
 loss_fn = MaskedMAE(compute_on_step=True)
 
-metrics = {'mae': MaskedMAE(compute_on_step=False),
-           'mse': MaskedMSE(compute_on_step=False),
-           'mre': MaskedMRE(compute_on_step=False),
-           'mape': MaskedMAPE(compute_on_step=False)}
+metrics = {'mae': MaskedMAE(compute_on_step=False)}
 
 model_kwargs = {
             'input_size':1,
             'hidden_size':32,
             'ff_size':32,
             'output_size':1,
-            'horizon':1,
+            'horizon':12,
             'kernel_size':2,
             'n_layers':4,
             'exog_size':0
@@ -84,6 +81,10 @@ predictor = Predictor(
     metrics=metrics
 )
 
+from pytorch_lightning.loggers import CSVLogger
+
+logger = CSVLogger(save_dir='models_data', name='NOT CONSIDER') #baseline_graph_hor12
+
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 
@@ -94,8 +95,8 @@ checkpoint_callback = ModelCheckpoint(
     mode='min',
 )
 
-trainer = pl.Trainer(max_epochs=100,
-                     #logger=logger,
+trainer = pl.Trainer(max_epochs=50,
+                     logger=logger,
                      gpus=1 if torch.cuda.is_available() else None,
                     #limit_train_batches=100,
                      callbacks=[checkpoint_callback])
