@@ -129,6 +129,13 @@ class TemporalDataBuilder():
 
 
     def obtain_id(self, row):
+        """
+        The function takes a row of data and returns a unique ID that is the concatenation of the values in
+        the 'State Code', 'County Code', and 'Site Num' columns
+        
+        :param row: a row of data from the dataframe
+        :return: A string of the state code, county code, and site number.
+        """
         sc = str(row['State Code'])
         cc = str(row['County Code'])
         sn = str(row['Site Num'])
@@ -144,6 +151,11 @@ class TemporalDataBuilder():
         return new_final
 
     def select_optimal_nodes(self, df):
+        """
+        Selects the optimal nodes to keep in the dataset (PM2.5 NaNs < 90%).
+        
+        :param df: the dataframe that contains the data
+        """
 
         for node in df.columns.get_level_values(0).drop_duplicates():
             keep = self.keep_node(df, node)

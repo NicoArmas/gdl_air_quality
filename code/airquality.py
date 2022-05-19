@@ -230,6 +230,10 @@ class AirQuality(PandasDataset):
         return sites_full, sites_red
 
     def gen_full_dist_matrix(self):
+        """
+        It takes a dataframe with two columns, latitude and longitude, and returns a distance matrix
+        :return: The distance matrix
+        """
         print("Generating distance matrix... ", end = '')
         
         dist = geographical_distance(self.red_sites_df.loc[:, ["Latitude","Longitude"]])
@@ -246,17 +250,14 @@ class AirQuality(PandasDataset):
         return dist
 
     def get_closest_nodes(self, start_node, n_nodes):
-        """ Get the N closest nodes from a starting node. 
-
-            Arguments:
-                start_node -- the node from which to get the N closest
-                          nodes
-                n_nodes -- the number of desired nodes to get by closeness          
-
-            Returns:
-                closest_nodes -- a list of N nodes which are the closest 
-                      ones to the starting node       
         """
+        This function takes in a node and returns the closest n nodes to it
+        
+        :param start_node: the node you want to find the closest nodes to
+        :param n_nodes: The number of nodes to return
+        :return: The closest nodes to the start node.
+        """
+       
         start_node = self.lookup_index(start_node)
         closest_dist = self.dist_mat.iloc[:, start_node]
         closest_dist = (closest_dist.sort_values())[:n_nodes]
@@ -267,6 +268,13 @@ class AirQuality(PandasDataset):
         return closest_nodes
 
     def get_random_nodes(self, n_nodes):
+        """
+        This function takes in the number of nodes you want to sample and returns a list of randomly
+        sampled nodes
+        
+        :param n_nodes: The number of nodes to be selected
+        :return: A list of random nodes
+        """
 
         all_nodes = self.dist_mat.index.values
         random_nodes = np.random.choice(all_nodes, n_nodes, replace=False)
