@@ -112,6 +112,7 @@ class AirQuality(PandasDataset):
                         sub_start = None, 
                         sub_size = 0,
                         data_dir ='data',
+                        random_sub = False,
                         test_months = (3, 6, 9, 12)):
 
         self.sites_url = "https://drive.switch.ch/index.php/s/hJN6mvHd13puOIa/download"
@@ -125,6 +126,8 @@ class AirQuality(PandasDataset):
         self.temporal = TemporalDataBuilder(data_dir=data_dir)
         self.dataset = self.temporal.dataset
         self.is_subgraph = is_subgraph
+        self.random_sub = random_sub
+
         self.sub_nodes = None
 
         self.data_path = pathlib.Path(data_dir)
@@ -141,7 +144,11 @@ class AirQuality(PandasDataset):
 
         
         if self.is_subgraph:
-            self.sub_nodes = self.get_closest_nodes(sub_start, sub_size)
+            if self.random_sub:
+                self.sub_nodes = self.get_random_nodes(sub_size)
+            else:
+                self.sub_nodes = self.get_closest_nodes(sub_start, sub_size)
+
             self.dataset, self.dist_mat = self.slice_data(self.sub_nodes)
 
         mask, eval_mask = self.create_masks()
@@ -258,6 +265,15 @@ class AirQuality(PandasDataset):
         closest_nodes.sort()
         
         return closest_nodes
+
+    def get_random_nodes(self, n_nodes):
+
+        all_nodes = self.dist_mat.index.values
+        random_nodes = np.random.choice(all_nodes, n_nodes, replace=False)
+        random_nodes = list(random_nodes)
+        random_nodes.sort()
+
+        return random_nodes
 
     def slice_data(self, nodes):
 
