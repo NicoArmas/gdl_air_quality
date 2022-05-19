@@ -17,6 +17,9 @@ It also contains the main class *airquality.py* and the temporal builder.
 
 	
 - _models\_data_ folder: contains logs and metrics of the trained models.
+
+- _tsl_ submodule: contains the TSL library for quick access. 
 		
-- _data_ folder: contains all of the dataset and the pickle files useful to load and build the classes.
+- _data_ folder: to be downloaded from https://drive.switch.ch/index.php/s/LVLgP5HbFcuXy8q in order for the project to work.
+
 
