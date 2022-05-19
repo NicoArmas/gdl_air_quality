@@ -17,8 +17,9 @@ class SpatialModel(GatedGraphNetwork):
         return out
 
     def message(self, x_i, x_j, mask_j):
-        mij = self.msg_mlp(torch.cat([x_i, x_j], -1)) #aggregate
-        return self.gate_mlp(mij) * mij #update
+        # gated message passing function
+        mij = self.msg_mlp(torch.cat([x_i, x_j], -1))
+        return self.gate_mlp(mij) * mij
 
 
 class AirQualityModel(nn.Module):
@@ -104,6 +105,15 @@ if __name__ == '__main__':
     import numpy as np
 
     from airquality import AirQuality as AQ
+    from tsl.data import SpatioTemporalDataset
+    from tsl.data import SpatioTemporalDataModule
+    from tsl.data.preprocessing import StandardScaler
+    from tsl.nn.metrics.metrics import MaskedMAE
+    from tsl.predictors import Predictor
+    from pytorch_lightning.loggers import CSVLogger
+    import pytorch_lightning as pl
+    from pytorch_lightning.callbacks import ModelCheckpoint
+
 
     dataset = AQ(is_subgraph=True, sub_start='6.0-79.0-8002.0', sub_size=70, data_dir='../data')
 
@@ -112,16 +122,11 @@ if __name__ == '__main__':
                                    normalize_axis=1,
                                    layout="edge_index")
 
-    from tsl.data import SpatioTemporalDataset
-
     torch_dataset = SpatioTemporalDataset(*dataset.numpy(return_idx=True),
                                           connectivity=adj,
                                           mask=dataset.mask,
                                           horizon=12,
                                           window=24)
-
-    from tsl.data import SpatioTemporalDataModule
-    from tsl.data.preprocessing import StandardScaler
 
     scalers = {'data': StandardScaler(axis=(0, 1))}
 
@@ -135,9 +140,6 @@ if __name__ == '__main__':
     )
 
     dm.setup()
-
-    from tsl.nn.metrics.metrics import MaskedMAE, MaskedMAPE
-    from tsl.predictors import Predictor
 
     loss_fn = MaskedMAE(compute_on_step=True)
 
@@ -160,12 +162,7 @@ if __name__ == '__main__':
         metrics=metrics
     )
 
-    from pytorch_lightning.loggers import CSVLogger
-
     logger = CSVLogger(save_dir='models_data', name='graph_model_[0.001,32,24,1]h12')
-
-    import pytorch_lightning as pl
-    from pytorch_lightning.callbacks import ModelCheckpoint
 
     checkpoint_callback = ModelCheckpoint(
         dirpath='logs',
