@@ -5,6 +5,8 @@ data_backup/
 .idea/
 .vscode/
 **/__pycache__
+**/logs
+**/lightning_logs
 
 # Ignore Files
 
